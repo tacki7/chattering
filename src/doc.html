@@ -1,0 +1,367 @@
+<div class="doc">
+  <div class="doc-toc card">
+    <div class="eyebrow">CONTENTS</div>
+    <ol>
+      <li><a href="#d-overview">対象と全体構成</a></li>
+      <li><a href="#d-roll">ロール系の運動方程式と固有振動</a></li>
+      <li><a href="#d-bite">ロールバイト（荷重・扁平化・先進率）</a></li>
+      <li><a href="#d-tension">質量流とスタンド間張力</a></li>
+      <li><a href="#d-mech">自励振動の機構（負の減衰）</a></li>
+      <li><a href="#d-horiz">水平自由度（全ロール）</a></li>
+      <li><a href="#d-reel">両端リールと張力制御</a></li>
+      <li><a href="#d-tors">駆動系のねじり振動</a></li>
+      <li><a href="#d-linear">線形化・固有値・安定性マップ</a></li>
+      <li><a href="#d-time">時間領域計算と信号処理</a></li>
+      <li><a href="#d-book">「板圧延の理論と実際」との対応</a></li>
+      <li><a href="#d-refs">参考文献</a></li>
+      <li><a href="#d-symbols">記号表</a></li>
+    </ol>
+    <p class="fine">数式は MathJax（cdnjs）で描画。オフライン時は TeX ソースがそのまま表示される。</p>
+  </div>
+
+  <section class="card doc-sec" id="d-overview">
+    <div class="eyebrow">1 · SCOPE</div>
+    <h2>対象と全体構成</h2>
+    <p>対象は 1〜6 スタンドの冷間タンデム圧延機（4Hi / 6Hi、1 スタンド時は 20Hi クラスタも可）で、板厚変動を伴う自励振動＝チャタリングを扱う。モデルは 3 つの部分系の連成として書く。</p>
+    <ul>
+      <li><b>ロール系</b>: 各スタンドのロールを上下方向の集中質量、ロール間・ハウジングをバネ＋減衰で結んだ多自由度系。任意で全ロールの水平自由度を追加。</li>
+      <li><b>ロールバイト</b>: 準静的な圧延理論（Hill の荷重式、Hitchcock の扁平化、Bland–Ford の中立点）で、ギャップ・入側板厚・前後張力から荷重 \(P\) と先進率 \(f\) を与える。</li>
+      <li><b>板（スタンド間）</b>: 張力を状態量とし、前後スタンドの板速度差の積分で変化する。板厚は \(L/v\) の遅れで次スタンドに到達する。</li>
+    </ul>
+    <p>状態ベクトルは
+      \[
+      \mathbf{y} = \bigl[\underbrace{\mathbf{x}_1,\dot{\mathbf{x}}_1,\dots,\mathbf{x}_{n_S},\dot{\mathbf{x}}_{n_S}}_{\text{ロール系}},\;
+      \underbrace{\Delta\sigma_1,\dots,\Delta\sigma_{n_S-1}}_{\text{スタンド間張力}},\;
+      \underbrace{\Delta\sigma_b,\Delta\omega_p,z_p,\Delta\sigma_f,\Delta\omega_t,z_t}_{\text{リール（任意）}}\bigr]^{\mathsf T}
+      \]
+      で、次元は \(N = \sum_i 2 n_{d,i} + (n_S-1) + 6\,[\text{リール}]\)。\(n_{d,i}\) はスタンド \(i\) の自由度（4Hi: 4、6Hi: 6、20Hi: 8、ハウジング伸びで +1、水平自由度ありで 2 倍）。5 スタンド全 4Hi・水平ありで \(N=84\)、ハウジング伸びも入れると \(N=104\)。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-roll">
+    <div class="eyebrow">2 · ROLL STACK</div>
+    <h2>ロール系の運動方程式と固有振動</h2>
+    <p>スタンド \(i\) のロール変位 \(\mathbf{x}_i\)（上向き正、単位 m）について
+      \[
+      \mathbf{M}\ddot{\mathbf{x}} + \mathbf{C}\dot{\mathbf{x}} + \mathbf{K}\mathbf{x} = \mathbf{f}(t),\qquad
+      \mathbf{f} = \Delta P\,(\mathbf{e}_{TW} - \mathbf{e}_{BW}) + \mathbf{f}_{\text{noise}}
+      \]
+      \(\Delta P = P - P_0\) は荷重の動作点からの偏差で、上 WR を押し上げ、下 WR を押し下げる。</p>
+    <h3>4Hi（教科書 図 8.41(a) と同じ 4 質量）</h3>
+    <p>上から BUR・WR・WR・BUR を \(m_1,\dots,m_4\)、ハウジング–BUR を \(k_1, k_5\)、BUR–WR 接触を \(k_2, k_4\)、板を \(k_3 = k_s\) とすると、無減衰の固有値問題は</p>
+    \[
+    \begin{vmatrix}
+    \dfrac{k_1+k_2}{m_1}-\omega^2 & -\dfrac{k_2}{m_1} & 0 & 0\\[6pt]
+    -\dfrac{k_2}{m_2} & \dfrac{k_2+k_3}{m_2}-\omega^2 & -\dfrac{k_3}{m_2} & 0\\[6pt]
+    0 & -\dfrac{k_3}{m_3} & \dfrac{k_3+k_4}{m_3}-\omega^2 & -\dfrac{k_4}{m_3}\\[6pt]
+    0 & 0 & -\dfrac{k_4}{m_4} & \dfrac{k_4+k_5}{m_4}-\omega^2
+    \end{vmatrix} = 0
+    \tag{2.1}
+    \]
+    <p>これは教科書の式 (8.35) と同形。6Hi（IMR を含む 6 質量）は式 (8.36)、より多い自由度は式 (8.37) に相当する。本アプリでは対称化 \(\mathbf{S} = \mathbf{M}^{-1/2}\mathbf{K}\mathbf{M}^{-1/2}\) の固有値分解で \(\omega_k\) とモード \(\boldsymbol{\phi}_k = \mathbf{M}^{-1/2}\mathbf{v}_k\) を求め、上下対称性（\(\phi_j = \pm\phi_{n-1-j}\)）でギャップ開閉モード（逆位相）とスタック並進モード（同位相）を分類する。</p>
+    <h3>剛性行列の組み立て</h3>
+    <p>要素 \(e\)（節点 \(a\)–\(b\)、\(b\) が固定端なら \(b=\varnothing\)）について
+      \[
+      K_{aa} \mathrel{+}= k_e,\quad K_{bb} \mathrel{+}= k_e,\quad K_{ab}=K_{ba} \mathrel{-}= k_e
+      \]
+      6Hi は BUR–IMR–WR–WR–IMR–BUR の直列 6 質量、20Hi はクラスタを荷重経路に沿って BB–IMR2–IMR1–WR–WR–IMR1–IMR2–BB の直列 8 質量に集約する（1 次中間 ×2、2 次中間 ×3、バッキング ×4 を各 1 質量にまとめ、接触剛性も合成値）。</p>
+    <h3>減衰</h3>
+    <p>要素ごとに減衰比 \(\zeta\) を与え、
+      \[
+      c_e = 2\zeta\sqrt{k_e\, m_{\text{red}}},\qquad m_{\text{red}} = \frac{m_a m_b}{m_a+m_b}\ (\text{固定端では } m_a)
+      \tag{2.2}
+      \]
+      \(\zeta\) は実機で最も不確かな量であり、臨界速度を実測に合わせる校正パラメータとして扱う（既定 0.13）。</p>
+    <h3>ハウジングの伸び変形（任意）</h3>
+    <p>既定では上下の BUR をそれぞれ剛性 \(k_h\) でハウジング（固定端）に支持する。オプションを有効にすると上側の支持を、圧下系剛性 \(k_{sd}\)、クロスヘッド質量 \(m_H\)、支柱伸び剛性 \(k_{\text{post}}\) の直列に置き換える：</p>
+    \[
+    m_H \ddot x_H = -k_{\text{post}}\,x_H - k_{sd}\,(x_H - x_{BUR,\text{top}}) + \dots,\qquad
+    k_{sd} = \frac{k_{\text{post}}\,k_h}{k_{\text{post}} - k_h}\quad(\Rightarrow\ \tfrac{1}{k_{sd}}+\tfrac{1}{k_{\text{post}}} = \tfrac{1}{k_h})
+    \tag{2.3}
+    \]
+    <p>静剛性（ミル剛性）は変えずに、ハウジング伸びモード（\(\approx\sqrt{(k_{\text{post}}+k_{sd})/m_H}/2\pi\)、既定値で約 200 Hz）を追加する。\(k_{\text{post}}\le k_h\) では静剛性を保てないため \(k_{sd}=20k_h\) に固定して警告する。</p>
+    <h3>質量</h3>
+    <p>胴部の体積に密度 \(\rho = 7850\ \mathrm{kg/m^3}\) とネック係数 1.2 を掛け、チョック質量（片側）の 2 倍を加える：
+      \(m = 1.2\,\rho\,\tfrac{\pi}{4}D^2 L_b + 2 m_{\text{chock}}\)。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-bite">
+    <div class="eyebrow">3 · ROLL BITE</div>
+    <h2>ロールバイト（荷重・扁平化・先進率）</h2>
+    <h3>流動応力</h3>
+    \[
+    k(\varepsilon) = \frac{2}{\sqrt3}\,K\,(\varepsilon_0+\varepsilon)^n,\qquad
+    \bar k = \frac{k(\varepsilon_{\text{in}}) + 2\,k(\varepsilon_{\text{out}})}{3},\qquad
+    \varepsilon = \ln\frac{h_0}{h}
+    \tag{3.1}
+    \]
+    <h3>圧延荷重（Hill）</h3>
+    \[
+    P = w\,l\,Q_p\,(\bar k - \bar\sigma),\qquad
+    l = \sqrt{R'\,(h_1-h_2)},\qquad
+    \bar\sigma = \tfrac12(\sigma_b+\sigma_f)
+    \tag{3.2}
+    \]
+    \[
+    Q_p = 1.08 + 1.79\,r\,\mu\sqrt{1-r}\,\sqrt{\frac{R'}{h_1}} - 1.02\,r,\qquad r = \frac{h_1-h_2}{h_1}
+    \tag{3.3}
+    \]
+    <h3>ロール扁平化（Hitchcock）</h3>
+    \[
+    R' = R\left(1 + \frac{16(1-\nu^2)}{\pi E_r}\,\frac{P}{w\,(h_1-h_2)}\right)
+    \tag{3.4}
+    \]
+    <p>(3.2)–(3.4) は不動点反復で解く（動作点では収束まで、動的計算では動作点の \(R'\) からの 3 回反復）。</p>
+    <h3>中立点と先進率（Bland–Ford）</h3>
+    \[
+    \phi_n = \sqrt{\frac{h_2}{R'}}\;\tan\!\left[\frac12\arctan\sqrt{\frac{r}{1-r}}
+      - \frac{1}{4\mu}\sqrt{\frac{h_2}{R'}}\,\ln\!\left(\frac{h_1}{h_2}\cdot\frac{1-\sigma_f/\bar k}{1-\sigma_b/\bar k}\right)\right],\qquad
+    f = \frac{R'}{h_2}\,\phi_n^{2}
+    \tag{3.5}
+    \]
+    <p>括弧内が負になると中立点がバイトの外に出て板がロールに対して滑る（スリップ）。アプリでは先進率を 0 とし、スタンドカードに SKID を表示する。小径ロールほど \(\sqrt{h_2/R'}\) が大きく、同じ \(\mu\) でもスリップしやすい（20Hi は \(\mu\) を大きめに取る理由）。</p>
+    <h3>ギャップと板バネ</h3>
+    \[
+    h_2 = h_{2,0} + (x_{TW}-x_{BW}),\qquad \dot h_2 = \dot x_{TW}-\dot x_{BW},\qquad
+    k_s = -\frac{\partial P}{\partial h_2}
+    \tag{3.6}
+    \]
+    <p>\(k_s\) は板を上下 WR 間のバネと見なしたときの剛性で、(2.1) の \(k_3\) に入る。動的計算ではバネではなく (3.2) の非線形関数として毎ステップ評価する。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-tension">
+    <div class="eyebrow">4 · MASS FLOW & TENSION</div>
+    <h2>質量流とスタンド間張力</h2>
+    \[
+    v_{\text{out}} = v_R\,(1+f),\qquad
+    v_{\text{in}}\,h_1 = v_{\text{out}}\,h_2 + \kappa\,l\,\dot h_2
+    \tag{4.1}
+    \]
+    <p>右辺第 2 項はギャップが閉じる（\(\dot h_2<0\)）ときにバイト内の材料が押し出される効果（\(\kappa\) は入側への配分、既定 0.5）。スタンド \(i\) と \(i+1\) の間の張力は</p>
+    \[
+    \frac{d\sigma_i}{dt} = \frac{E}{L}\left(v_{\text{in},i+1} - v_{\text{out},i}\right)
+    \tag{4.2}
+    \]
+    <p>板厚はスタンド間を板速度で移動するので
+      \[
+      h_{1,i}(t) = h_{2,i-1}\!\left(t - \frac{L}{v_{\text{out},i-1}}\right)
+      \tag{4.3}
+      \]
+      （ライブ計算のみ。線形化では \(h_1\) を一定とする）。定常では質量流一定 \(v_{\text{out},i}h_{2,i} = \text{const}\) からロール周速 \(v_{R,i} = v_{\text{out},i}/(1+f_i)\) を決める。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-mech">
+    <div class="eyebrow">5 · MECHANISM</div>
+    <h2>自励振動の機構（負の減衰）</h2>
+    <p>ギャップ偏差 \(x = \Delta h_2\) が \(x = A\sin\omega t\) で振動しているとする。(4.1) から入側速度は \(\Delta v_{\text{in}} \simeq (v_{\text{out}}/h_1)\,x\) だけ変わり、(4.2) により後方張力は</p>
+    \[
+    \Delta\sigma_b = \frac{E}{L}\frac{v_{\text{out}}}{h_1}\int x\,dt
+    = -\frac{E}{L}\frac{v_{\text{out}}}{h_1}\,\frac{A}{\omega}\cos\omega t
+    \tag{5.1}
+    \]
+    <p>荷重は \(\partial P/\partial\sigma_b<0\) なので</p>
+    \[
+    \Delta P = \frac{\partial P}{\partial \sigma_b}\Delta\sigma_b
+    = \left|\frac{\partial P}{\partial \sigma_b}\right|\frac{E}{L}\frac{v_{\text{out}}}{h_1}\frac{A}{\omega}\cos\omega t
+    = \frac{G}{\omega^{2}}\,\dot x,\qquad
+    G \equiv \left|\frac{\partial P}{\partial \sigma_b}\right|\frac{E}{L}\frac{v_{\text{out}}}{h_1}
+    \tag{5.2}
+    \]
+    <p>すなわち荷重変動はギャップ<em>速度</em>に同相で、ギャップを開く向きに働く。これは等価減衰係数</p>
+    \[
+    c_{\text{eq}} = -\frac{G}{\omega^{2}}
+    \tag{5.3}
+    \]
+    <p>の<b>負の減衰</b>である。前方張力側でも同じ符号の寄与（\(\partial f/\partial h_2\) 経由）が加わる。構造減衰 \(c_{\text{struct}}\) との和が負になる条件が自励の条件で、\(G \propto v\) から臨界速度は</p>
+    \[
+    v_{\text{crit}} \;\propto\; \frac{c_{\text{struct}}\;\omega^{2}\;L\;h_1}{E\,|\partial P/\partial\sigma_b|}
+    \tag{5.4}
+    \]
+    <p>アプリでは (5.4) を各スタンドについて \(c^{*} = \boldsymbol\phi^{\mathsf T}\mathbf C\boldsymbol\phi\)、\(m^{*} = \boldsymbol\phi^{\mathsf T}\mathbf M\boldsymbol\phi\)（ギャップ開閉モード）で評価し、\(v_{\text{crit}} = v_{\text{ref}}\,c^{*}/c_{\text{neg}}(v_{\text{ref}})\) のスタンド最小値を安定性マップに金色の点線で重ねている。隣接スタンドが同じ張力に応答して変動を打ち消す効果を含まないため、固有値計算（白線）より 1.3〜3 倍ほど低速側に出る。傾向（∝ ζ ω³ L h₁ / (E ∂P/∂σ)）の確認用。</p>
+    <p>\(\omega^2\) に反比例するため、上下逆位相の低次ギャップ開閉モード（100–200 Hz、3 次オクターブ帯）が最初に不安定化する。減衰 \(\zeta\)、ハウジング剛性（\(\omega\) を上げる）、スタンド間距離 \(L\) が大きいほど有利、板幅・張力感度が大きいほど不利になる。単スタンドで前後張力が一定なら \(G=0\) で自励しないが、両端リールを含めるとリール〜スタンド間の板が同じ積分器になり (5.2) が復活する。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-horiz">
+    <div class="eyebrow">6 · HORIZONTAL DOF</div>
+    <h2>水平自由度（全ロール）</h2>
+    <p>各ロール \(j\) に圧延方向（出側正）の変位 \(x_{h,j}\) を追加する。ロールはチョックでハウジングに支持され（\(k_{x}\): WR、\(k_{xI}\): IMR、\(k_{xB}\): BUR／バッキング）、接触するロール同士は接線（摩擦）剛性 \(k_t = \kappa_t k_c\) と、荷重 \(P_0\) を伝える傾斜接触の幾何剛性で結合する：</p>
+    \[
+    \mathbf{M}\ddot{\mathbf{x}}_h + \mathbf{C}_h\dot{\mathbf{x}}_h + \bigl(\mathbf{K}_h + \mathbf{K}_g\bigr)\mathbf{x}_h = \mathbf{f}_h,\qquad
+    (\mathbf K_g)_{ab} : \; F_a = +\frac{P_0}{R_a+R_b}\,(x_{h,a}-x_{h,b})\ \text{（負の剛性）}
+    \tag{6.1}
+    \]
+    <p>WR に働く外力は</p>
+    \[
+    \Delta F_s = \tfrac12 w\,\bigl[(\sigma_f h_2 - \sigma_{f0}h_{2,0}) - (\sigma_b h_1 - \sigma_{b0}h_{1,0})\bigr],\quad
+    \Delta F_b = -\lambda\,\frac{lP - l_0P_0}{R'},\quad
+    \Delta F_o = \frac{(P-P_0)\,e}{R_W + R_{\text{adj}}}
+    \tag{6.2}
+    \]
+    <p>\(\Delta F_s\) は前後張力差、\(\Delta F_b\) はバイトの圧力・摩擦合力の反力（1 ロールのトルク \(G_r = \lambda l P\) をロール半径で割ったもの、入側向き）、\(\Delta F_o\) は WR オフセット \(e\) を通した荷重変動の水平分力（20Hi では 0）。BUR・IMR は接触を介してのみ駆動される。上下のロール列は水平方向には独立なので、固有モードは上下同相・逆相の縮退対になる。逆結合として WR の平均水平速度がバイトの並進速度として (4.1) の両辺に加わる：</p>
+    \[
+    v_{\text{out}} \to v_{\text{out}} + \bar{\dot x}_h,\qquad v_{\text{in}} \to v_{\text{in}} + \bar{\dot x}_h,\qquad \bar{\dot x}_h = \tfrac12(\dot x_{h,T}+\dot x_{h,B})
+    \tag{6.3}
+    \]
+    <p>既定値では 4Hi で WR–BUR が同相で動く水平モード ≈ 135 Hz、逆相 ≈ 333 Hz、6Hi では BUR 卓越 144 Hz・WR 卓越 268 Hz・IMR 卓越 506 Hz。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-reel">
+    <div class="eyebrow">7 · END REELS</div>
+    <h2>両端リールと張力制御</h2>
+    <p>ペイオフリール（添字 \(p\)）とテンションリール（添字 \(t\)）を、速度ループ付き駆動＋張力 PI 制御としてモデル化する。リール周速 \(v = 10^3 R\,\omega\)（mm/s）、板断面 \(A = w h\)。</p>
+    \[
+    \frac{d\sigma_b}{dt} = \frac{E}{L_r}\bigl(v_{\text{in},1} - v_p\bigr),\qquad
+    \frac{d\sigma_f}{dt} = \frac{E}{L_r}\bigl(v_t - v_{\text{out},n_S}\bigr)
+    \tag{7.1}
+    \]
+    \[
+    J\,\dot\omega_p = K_v\bigl(\Delta\omega_{p,\text{ref}} - \Delta\omega_p\bigr) + \Delta\sigma_b A_p R,\qquad
+    J\,\dot\omega_t = K_v\bigl(\Delta\omega_{t,\text{ref}} - \Delta\omega_t\bigr) - \Delta\sigma_f A_t R
+    \tag{7.2}
+    \]
+    \[
+    \Delta v_{p,\text{ref}} = -\bigl(K_p e_p + K_{i,p} z_p\bigr),\quad
+    \Delta v_{t,\text{ref}} = +\bigl(K_p e_t + K_{i,t} z_t\bigr),\quad
+    e = \sigma_{\text{ref}}-\sigma,\quad \dot z = e
+    \tag{7.3}
+    \]
+    <p>ゲインは帯域指定から決める：\(K_v = J\,\omega_v\)、\(K_p = \omega_t L_r/E\)、速度ループのドループ \(D = 10^3 R^2 A/K_v\) を含めて \(K_i = \omega_t (K_p + D)\)。リール〜板の共振は概ね \(\sqrt{10^3 E A R^2/(J L_r)}/2\pi\)（既定で 5〜20 Hz）で、速度ループが減衰を与える。\(f_t = 0\) で張力制御なし（速度一定リール）。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-tors">
+    <div class="eyebrow">7b · DRIVE TORSION</div>
+    <h2>駆動系のねじり振動（任意）</h2>
+    <p>教科書 §9.4.3 の離散化（式 (9.31)–(9.33)、図 9.28）に従い、各スタンドの駆動系を電動機側慣性 \(J_M\)（減速機・ピニオンスタンドをロール軸速度に換算）、スピンドル（ねじり剛性 \(C\)、減衰 \(d\)）、上下 WR 慣性 \(J_W\) の 3 慣性系とする。定常回転からの偏差量で</p>
+    \[
+    J_M\dot\omega_M = T_M - M_T - M_B,\qquad
+    J_W\dot\omega_{T} = M_T - \Delta G,\qquad
+    J_W\dot\omega_{B} = M_B - \Delta G
+    \tag{7b.1}
+    \]
+    \[
+    M_{T} = C\,(\varphi_M - \varphi_T) + d\,(\omega_M - \omega_T)\quad(\text{がた付き: 図 9.29 の非線形特性を静的ねじれ角 } \delta_0 = G_0/C \text{ まわりで評価})
+    \tag{7b.2}
+    \]
+    \[
+    G = \lambda\,l\,P + \tfrac12\,(\sigma_b h_1 - \sigma_f h_2)\,w\,R_W,\qquad
+    T_M = -K_p\,\Delta\omega_M + K_i\!\int(-\Delta\omega_M)\,dt
+    \tag{7b.3}
+    \]
+    <p>\(G\) は 1 ロールあたりの圧延トルク（トルクアーム λ·l と前後張力差）、\(T_M\) は電動機の速度 PI 制御（帯域 \(f_{sc}\)、図 9.31 の単純化）。逆結合として WR の平均角速度偏差がロール周速に入る：</p>
+    \[
+    v_R = R_W\left(\omega_0 + \tfrac12(\Delta\omega_T + \Delta\omega_B)\right)
+    \tag{7b.4}
+    \]
+    <p>ねじり固有振動数は 3 慣性系の固有値から求め（既定値で ≈ 20 Hz 上下逆相、21 Hz 同相）、連成系の固有値ではねじり成分（\(\varphi\cdot R_W\) 換算）の割合が過半のモードを「ねじり」として分類する。教科書 9.4.4 の指摘どおり、速度制御帯域を上げるとねじり固有振動数付近の減衰が変化する。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-linear">
+    <div class="eyebrow">8 · LINEARISATION</div>
+    <h2>線形化・固有値・安定性マップ</h2>
+    <p>非線形状態方程式 \(\dot{\mathbf y} = \mathbf F(\mathbf y)\) を動作点 \(\mathbf y = 0\)（偏差量で記述しているため）まわりで中心差分により線形化する：</p>
+    \[
+    A_{ij} = \frac{F_i(\mathbf y + \delta_j\mathbf e_j) - F_i(\mathbf y - \delta_j\mathbf e_j)}{2\delta_j},\qquad
+    \delta_j = \begin{cases}10^{-7}\ \mathrm{m} & \text{変位}\\ 10^{-3}\ \mathrm{m/s} & \text{速度}\\ 10^{-2}\ \mathrm{MPa} & \text{張力}\end{cases}
+    \tag{8.1}
+    \]
+    <p>Parlett–Reinsch のバランシング後に固有値 \(\lambda_k = \operatorname{Re}\lambda_k \pm j\,2\pi f_k\) を求める（JAMA 系の Hessenberg–QR）。</p>
+    \[
+    \text{不安定} \iff \max_k \operatorname{Re}\lambda_k > 0,\qquad
+    \zeta_{\text{eq},k} = -\frac{\operatorname{Re}\lambda_k}{|\lambda_k|}
+    \tag{8.2}
+    \]
+    <p>臨界速度は \(\max\operatorname{Re}\lambda\) の符号が変わる速度を二分法で求める。安定性マップは速度 × 選択パラメータの格子ごとに動作点の再計算・線形化・固有値計算を行い、\(\max\operatorname{Re}\lambda\)（振動モード、\(f\ge 5\) Hz）を色で示す。白線が \(\operatorname{Re}\lambda=0\) の等高線＝安定限界。線形化なので板厚の伝搬遅れ (4.3) は含まない（微小擾乱の成長判定のみ）。各格子では最不安定モードの固有ベクトルから水平成分・ハウジング成分のエネルギー割合を取り、モード種別（3次＝上下ギャップ開閉 \(f<300\) Hz、5次＝ロール相対 \(300\le f<1000\) Hz、水平、ハウジング伸び、張力／リール \(f<30\) Hz）に分類する。「対象モード」で垂直（3次・5次・ハウジング伸び）／水平／ねじりを選ぶと、その種類のモードだけで \(\max\operatorname{Re}\lambda\) を取って判別する（該当するモードが無い格子は灰色、臨界速度一覧と No.3 × No.4 マップも同じ基準）。「モード帯」表示はこの種別で塗り分け、マップ内のラベルは同一（安定性・種別・主スタンド）の連結領域ごとに周波数の中央値と主スタンドを示す。「スタンド別」モードは摩擦係数をスタンドごと、張力を区間ごとに独立に振ったマップを並べる。</p>
+    <h3>No.3 × No.4 圧下率マップ（速度 = 現状 +200 / +400 / +600 m/min）</h3>
+    <p>横軸 \(r_3\)、縦軸 \(r_4\)、速度は現状 +200・+400・+600 m/min の 3 通りに固定し、1 枚ずつ横に並べて比較する（下の表に速度ごとの現状・実線上の最安定点・安定区間・面内の最安定点をまとめる）。No.2 出側板厚 \(h_2\) と、No.5 以降の出側板厚（したがって最終出側板厚）を固定し、</p>
+    \[
+    h_3 = h_2\,(1-r_3),\qquad h_4 = h_3\,(1-r_4),\qquad r_5 = 1 - \frac{h_5}{h_4}
+    \tag{8.3}
+    \]
+    <p>とする。面の各点では No.5 の圧下率が変わって出側板厚を保つ。No.3 と No.4 だけで圧下を配分し替える（No.4 出側板厚も一定）条件は</p>
+    \[
+    (1-r_3)(1-r_4) = \frac{h_4}{h_2} = \text{const}
+    \tag{8.4}
+    \]
+    <p>の曲線（実線）で、この線上を 41 点で別途計算し、安定な区間を太線、不安定な区間を破線、線上の最安定点を ★、面内の最安定点を ○、現状を ◇ で示す。No.4 が最終スタンド（4 スタンド）の場合は、出側板厚一定になるのは線上のみなので面を淡く表示する。板厚が単調に減らない点、または 1 パスの圧下率が 70 % を超える点は計算対象外（灰色）。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-time">
+    <div class="eyebrow">9 · TIME DOMAIN</div>
+    <h2>時間領域計算と信号処理</h2>
+    <ul>
+      <li><b>積分</b>: 古典的 4 次 Runge–Kutta、\(\Delta t = 50\ \mu\mathrm{s}\)（20 kHz）。最高次モード（6Hi の IMR モード ~750 Hz、20Hi では kHz 級）でも \(\omega\Delta t < 1.2\) で安定域内。</li>
+      <li><b>伝搬遅れ</b>: スタンド間ごとに長さ \(\lceil L/(v\Delta t)\rceil + 1\) のリングバッファに出側板厚を書き、最古値を次スタンドの入側板厚として読む。速度変更時は偏差履歴を再サンプルして引き継ぐ。</li>
+      <li><b>擾乱</b>: 各ギャップに白色ノイズ力（既定 2 kN rms、\(\Delta t\) 換算）、任意でインパルス（ギャップ速度 4 mm/s、水平 10 mm/s）や入側板厚外乱。</li>
+      <li><b>破断</b>: 板厚偏差がしきい値（既定 150 µm）を超えると板破断とみなし、状態を動作点に戻して再通板する（回数を表示）。コイル破断の目安線（既定 75 µm、ライブ画面で変更可）を波形・スペクトルに引く。教科書 図 8.38 では ±25 µm の板厚変動でコイル破断に至った例が示されている。</li>
+      <li><b>信号</b>: 板厚偏差、スタンド間張力偏差、圧延荷重偏差に加え、ロール振動として上 WR・下 WR の上下加速度 \(\ddot x\)（m/s²、チョック取付加速度計相当）を記録し、スペクトル・スペクトログラムの信号に選べる。</li>
+      <li><b>スペクトル</b>: 直近 8192 点（0.41 s）の Hann 窓 FFT。振幅はコヒーレントゲイン 0.5 で補正し、正弦波振幅 \(A\) がピーク高さ \(A\) になるよう正規化。スペクトログラム（3D ウォーターフォール）は 20 ms ごとの 4096 点 FFT を奥行き方向に積み（奥行きは最大 20 s。約 50 列に収まるよう、長いときは 1 列に複数回の FFT をピークホールドでまとめる）、全スタンド（張力は区間ごと）を横に並べる。高さ Z 軸は全パネル共通で、振動は 50 m/s² 固定。</li>
+      <li><b>成長率</b>: 10 ms 窓の RMS の対数を直線回帰し、傾き \(\sigma\)（1/s）と \(\zeta_{\text{eq}} = -\sigma/(2\pi f)\) を表示。</li>
+    </ul>
+  </section>
+
+  <section class="card doc-sec" id="d-book">
+    <div class="eyebrow">10 · TEXTBOOK CROSS-REFERENCE</div>
+    <h2>「板圧延の理論と実際」との対応</h2>
+    <p>第 8 章「摩擦と潤滑」8.4「潤滑にかかわる不良現象」8.4.2「チャタリング」（pp. 204–205）および 8.4.3「スリップ現象」（p. 205）の記述に基づく。ページ番号は提示された見開き写真で確認したもの。圧延荷重・先進率・扁平化の各式は同書の圧延理論の章に解説があるが、その章のページ番号は手元の版で確認されたい。</p>
+    <div class="table-wrap">
+      <table class="data doc-table">
+        <tr><th>教科書</th><th>内容</th><th>本アプリでの扱い</th></tr>
+        <tr><td class="t">§8.4.2 本文 p.204</td><td class="t">チャタリングは数 10 Hz〜5,600 Hz に数種類。100 数 10〜200 Hz は変形抵抗の高い薄物で発生し、圧延油の乳化特性・潤滑性が関与（文献 16, 46, 47）。</td><td class="t">3 次オクターブ帯（100–200 Hz）・5 次オクターブ帯（500–700 Hz）を帯域図・スペクトルに網掛け。潤滑は摩擦係数 μ で代表。</td></tr>
+        <tr><td class="t">図 8.38 p.204</td><td class="t">3 スタンドミルでチャタリング発生時の板厚変動（目標 0.16 mm、偏差 ±25 µm）。最終的にコイル破断。</td><td class="t">ライブ波形とスペクトルのコイル破断目安線（既定 75 µm、変更可）。破断しきい値（既定 150 µm）で再通板。</td></tr>
+        <tr><td class="t">図 8.39 p.204</td><td class="t">圧延油（牛脂系）のエマルション粒径・オイルフロート厚み・濃度偏差・ESI・荷重・摩擦係数・発生率の推移。仕込み直後や乳化不良で多発。</td><td class="t">直接は扱わない。摩擦係数倍率を安定性マップの縦軸に選べる。</td></tr>
+        <tr><td class="t">図 8.40 p.204</td><td class="t">6 スタンド、パーム油直接給油のブリキ原板。摩擦係数が下限値を越え、板温が低い場合に加減速時に多発（文献 30）。</td><td class="t">プリセット「ブリキ原板」（6Hi、薄物・高速）。速度依存のスリップ判定。</td></tr>
+        <tr><td class="t">図 8.41 p.205</td><td class="t">振動解析用ロール系モデル (a) 4 自由度 (b) 5 自由度 (c) 7 自由度（文献 46, 48, 49）。</td><td class="t">(a) と同形の 4Hi 4 質量、6Hi 6 質量、20Hi 8 質量。式 (2.1)。</td></tr>
+        <tr><td class="t">式 (8.35)–(8.37) p.205</td><td class="t">各モデルの固有振動数を与える特性方程式 \(\det(\mathbf K-\omega^2\mathbf M)=0\)。</td><td class="t">固有振動タブ「単スタンドの固有モード」。板を \(k_s=-\partial P/\partial h_2\) のバネとして含める。</td></tr>
+        <tr><td class="t">結論 p.205</td><td class="t">上ロールと下ロールが逆向きに動く第 2 次モードの振動数が板厚変動の周波数とほぼ一致。4 質量–バネモデルの安定判別から、減衰係数（油圧ジャッキ等）を大きく、ミル剛性を大きく、圧延中の弾性定数を小さくする対策が望ましい。</td><td class="t">既定条件で 116〜165 Hz のギャップ開閉（逆位相）モードが最不安定。安定性マップの縦軸に ζ・ハウジング剛性を選ぶと同じ傾向が出る。</td></tr>
+        <tr><td class="t">§9.4.3–9.4.4 pp. 236–237</td><td class="t">駆動系のねじり振動: 連続軸の波動方程式 (9.16)–(9.23)、伝達マトリックス (9.24)–(9.30)、離散系 (9.31)–(9.33)、がた（図 9.29）、電動機–軸–ロールの 2 慣性モデルと速度制御ブロック図（図 9.30・9.31、式 (9.36)）。制御系との共振で振動トルク増大。</td><td class="t">「駆動系ねじり振動」オプション（3 慣性＋がた＋速度 PI、§7b）。ねじり固有振動数を固有振動タブに ▲ で表示、スピンドルトルクをライブ信号に追加。</td></tr>
+        <tr><td class="t">§8.4.3 p.205</td><td class="t">Al キルド鋼の冷間圧延で、ロール粗度低下（0.2 µm Ra）→ 摩擦係数低下 → スリップ → 鋼帯破断（文献 48, 50–54）。図 8.42 は研削条件による WR 粗度変化（文献 52）。</td><td class="t">Bland–Ford の中立点がバイト外に出る条件を SKID として表示（式 3.5）。粗度そのものはモデル化せず μ で代表。</td></tr>
+      </table>
+    </div>
+    <p class="fine">文献番号は同書の引用番号。書誌情報は同書の章末文献リストを参照。</p>
+  </section>
+
+  <section class="card doc-sec" id="d-refs">
+    <div class="eyebrow">11 · REFERENCES</div>
+    <h2>参考文献</h2>
+    <ol class="refs">
+      <li>日本鉄鋼協会 編『板圧延の理論と実際』第 8 章「摩擦と潤滑」§8.4.2 チャタリング（pp. 204–205）、§8.4.3 スリップ現象（p. 205）；第 9 章「圧延機の剛性」§9.4.3 駆動系動特性の解析、§9.4.4 駆動系動特性と電気制御系（pp. 236–237、図 9.28–9.31、式 (9.16)–(9.36)）。</li>
+      <li>R. Hill, <i>The Mathematical Theory of Plasticity</i>, Oxford, 1950 — 冷間圧延荷重の近似式（式 3.2–3.3 の \(Q_p\)）。</li>
+      <li>D. R. Bland and H. Ford, “The calculation of roll force and torque in cold strip rolling with tensions,” <i>Proc. IMechE</i> 159 (1948) — 中立点と先進率（式 3.5）。</li>
+      <li>J. H. Hitchcock, “Roll neck bearings,” <i>ASME Research Committee Report</i>, 1935 — ロール扁平化（式 3.4）。</li>
+      <li>I.-S. Yun, W. R. D. Wilson and K. F. Ehmann, “Chatter in the strip rolling process, Parts 1–3,” <i>ASME J. Manuf. Sci. Eng.</i> 120 (1998) — 張力積分による負の減衰と 3 次オクターブチャタリングの機構（§5）。</li>
+      <li>P.-H. Hu and K. F. Ehmann, “A dynamic model of the rolling process, Parts I–II,” <i>Int. J. Mach. Tools Manuf.</i> 40 (2000) — 動的ロールバイト（バイト体積項 κ の考え方）。</li>
+      <li>J. Tlusty, G. Chandra, S. Critchley and D. Paton, “Chatter in cold rolling,” <i>CIRP Annals</i> 31 (1982) — タンデム圧延機チャタリングの古典的解析。</li>
+      <li>B. N. Parlett and C. Reinsch, “Balancing a matrix for calculation of eigenvalues and eigenvectors,” <i>Numer. Math.</i> 13 (1969) — 固有値計算前のバランシング（§8）。</li>
+    </ol>
+  </section>
+
+  <section class="card doc-sec" id="d-symbols">
+    <div class="eyebrow">12 · SYMBOLS</div>
+    <h2>記号表</h2>
+    <div class="table-wrap">
+      <table class="data doc-table">
+        <tr><th>記号</th><th>意味</th><th>単位</th></tr>
+        <tr><td>\(h_0, h_1, h_2\)</td><td class="t">ライン入側板厚、スタンド入側板厚、出側板厚</td><td>mm</td></tr>
+        <tr><td>\(r\)</td><td class="t">圧下率 \((h_1-h_2)/h_1\)</td><td>–</td></tr>
+        <tr><td>\(w, L_b\)</td><td class="t">板幅、ロール胴長</td><td>mm</td></tr>
+        <tr><td>\(R, R'\)</td><td class="t">WR 半径、扁平化半径</td><td>mm</td></tr>
+        <tr><td>\(l\)</td><td class="t">投影接触長 \(\sqrt{R'(h_1-h_2)}\)</td><td>mm</td></tr>
+        <tr><td>\(P, P_0\)</td><td class="t">圧延荷重、その動作点値</td><td>N</td></tr>
+        <tr><td>\(\sigma_b, \sigma_f\)</td><td class="t">後方（入側）張力、前方（出側）張力</td><td>MPa</td></tr>
+        <tr><td>\(\bar k, K, n, \varepsilon_0\)</td><td class="t">平均流動応力、強度係数、加工硬化指数、初期ひずみ</td><td>MPa, MPa, –, –</td></tr>
+        <tr><td>\(\mu\)</td><td class="t">摩擦係数</td><td>–</td></tr>
+        <tr><td>\(f, \phi_n\)</td><td class="t">先進率、中立角</td><td>–, rad</td></tr>
+        <tr><td>\(v_R, v_{\text{in}}, v_{\text{out}}\)</td><td class="t">ロール周速、入側・出側板速度</td><td>mm/s</td></tr>
+        <tr><td>\(E, E_r, \nu\)</td><td class="t">板ヤング率、ロールヤング率、ポアソン比</td><td>MPa</td></tr>
+        <tr><td>\(L, L_r\)</td><td class="t">スタンド間距離、リール〜スタンド距離</td><td>mm</td></tr>
+        <tr><td>\(\kappa\)</td><td class="t">バイト体積係数</td><td>–</td></tr>
+        <tr><td>\(m_j, k_e, c_e, \zeta\)</td><td class="t">集中質量、要素剛性、要素減衰、要素減衰比</td><td>kg, N/m, N·s/m, –</td></tr>
+        <tr><td>\(J_M, J_W, C, d, \Delta\varphi, G\)</td><td class="t">電動機側慣性、WR 慣性、スピンドルねじり剛性・減衰、がた、圧延トルク（1 ロール）</td><td>kg·m², kg·m², N·m/rad, N·m·s/rad, rad, N·m</td></tr>
+        <tr><td>\(m_H, k_{\text{post}}, k_{sd}\)</td><td class="t">クロスヘッド質量、支柱伸び剛性、圧下系剛性（ハウジング伸びオプション）</td><td>kg, N/m, N/m</td></tr>
+        <tr><td>\(k_s\)</td><td class="t">板バネ剛性 \(-\partial P/\partial h_2\)</td><td>N/m</td></tr>
+        <tr><td>\(k_x, k_{xI}, k_{xB}, \kappa_t, e, \lambda\)</td><td class="t">WR／IMR／BUR の水平支持剛性、接線剛性比、WR オフセット、トルクアーム係数</td><td>N/m, –, mm, –</td></tr>
+        <tr><td>\(R_{\text{reel}}, J, K_v, K_p, K_i\)</td><td class="t">コイル半径、リール慣性、速度ループゲイン、張力 P・I ゲイン</td><td>m, kg·m², N·m·s, mm/s/MPa, mm/s/(MPa·s)</td></tr>
+        <tr><td>\(\lambda_k, f_k, \zeta_{\text{eq}}\)</td><td class="t">連成系の固有値、周波数、等価減衰比</td><td>1/s, Hz, –</td></tr>
+      </table>
+    </div>
+  </section>
+</div>

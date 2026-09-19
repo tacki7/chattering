@@ -1,0 +1,383 @@
+<title>Tandem Chatter Lab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+JP:wght@400;500;600&display=swap">
+<style>
+/* __CSS__ */
+</style>
+
+<header class="top">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <div>
+      <div class="eyebrow">TANDEM COLD MILL · 1–6 STANDS · 4Hi / 6Hi / 20Hi</div>
+      <h1>チャタリング・ラボ</h1>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="表示切替">
+    <button class="tab on" data-tab="overview">概要</button>
+    <button class="tab" data-tab="modal">固有振動</button>
+    <button class="tab" data-tab="live">ライブ</button>
+    <button class="tab" data-tab="stability">安定性マップ</button>
+    <button class="tab" data-tab="doc">モデル解説</button>
+  </nav>
+  <div class="top-right">
+    <div class="seg density" role="group" aria-label="表示密度"><button type="button" data-density="standard">標準</button><button type="button" data-density="compact" class="on">コンパクト</button><button type="button" data-density="dense">高密度</button></div>
+    <div class="pill cycle" id="cyclePill" title="時間積分刻み Δt と計算レート ｜ 描画周期 ｜ 1 フレームあたりの積分ステップ数 ｜ 時間スケール">Δt — ｜ 描画 — ｜ — step/f</div>
+    <div class="pill" id="statusPill"><span class="dot"></span><span class="pill-text">—</span></div>
+    <button class="btn ghost" id="btnHalt" aria-pressed="false" title="シミュレーション・安定性マップ・臨界速度の計算をすべて止めます（再開すると続きから計算）">計算停止</button>
+    <button class="btn ghost only-mobile" id="btnParams" aria-controls="params" aria-expanded="false">パラメータ</button>
+  </div>
+</header>
+
+<div class="shell">
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="params" id="params" aria-label="パラメータ">
+    <div class="params-head">
+      <div class="eyebrow">PARAMETERS</div>
+      <button class="btn ghost sm" id="btnHelpAll" type="button" aria-pressed="false">説明を表示</button>
+      <button class="btn ghost sm" id="btnJson" type="button">JSON 書出／読込</button>
+      <button class="btn ghost sm params-close" id="btnParamsClose" type="button">閉じる</button>
+      <div class="presets" id="presets"></div>
+    </div>
+    <div id="paramGroups"></div>
+    <p class="fine">変更は即時に反映。動作点・固有振動・安定判別は同期計算、ライブ計算は状態を保ったまま条件が切り替わる。</p>
+  </aside>
+
+  <main>
+    <section class="hero card">
+      <div class="hero-head">
+        <div>
+          <div class="eyebrow">MILL LINE · LIVE</div>
+          <div class="hero-title" id="heroTitle">—</div>
+        </div>
+        <div class="hero-meta" id="heroMeta"></div>
+      </div>
+      <div class="mill-wrap"><svg id="mill" role="img" aria-label="タンデムミルの模式図（ライブ振動表示）"></svg></div>
+      <div class="stands" id="standCards"></div>
+    </section>
+
+    <!-- ===== 概要 ===== -->
+    <section class="tabpanel" id="tab-overview">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><div class="eyebrow">OPERATING POINT</div><h2>動作点</h2></div>
+          <div class="table-wrap"><table class="data" id="opTable"></table></div>
+          <p class="fine">Hill 式（Hitchcock 扁平化込み）で圧延荷重、Bland–Ford 中立点で先進率を算出。ks = −∂P/∂h₂ は板をバネと見なしたときの剛性。</p>
+        </div>
+        <div class="card" id="verdictCard">
+          <div class="card-head"><div class="eyebrow">CHATTER VERDICT</div><h2>チャタリング判定</h2></div>
+          <div id="verdict"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="eyebrow">NATURAL FREQUENCIES</div><h2>各スタンドの固有振動数と帯域</h2><span class="legend-note">● ギャップ開閉 ○ その他 ◆ 水平 □ ハウジング伸び ▲ ねじり ｜ 縦線 = 連成系の最不安定モード</span></div>
+        <canvas id="modeBands" class="chart h-bands"></canvas>
+        <div class="tip" id="tipBands" hidden></div>
+      </div>
+      <details class="card model-notes">
+        <summary><span class="eyebrow">MODEL</span><h2>モデルの中身</h2></summary>
+        <div class="notes-grid">
+          <div>
+            <h3>ロール系（各スタンド）</h3>
+            <p>4Hi は BUR–WR–WR–BUR の 4 質量、6Hi は IMR を加えた 6 質量の直列バネ–質量系。上下端はハウジング剛性 k<sub>h</sub> で固定端に、ロール間は接触剛性で結合。板は WR 間のバネ k<sub>s</sub> = −∂P/∂h₂ として作用し、固有振動数は det(K − ω²M) = 0 から求める（教科書の式 (8.35) 相当）。減衰は要素ごとに c = 2ζ√(k·m<sub>red</sub>)。</p>
+            <h3>ロールバイト</h3>
+            <p>P = w · l · Q<sub>p</sub> · (k̄ − σ̄), l = √(R′·Δh), Hill の Q<sub>p</sub> = 1.08 + 1.79 r μ √(1−r) √(R′/h₁) − 1.02 r。R′ は Hitchcock の扁平化。先進率は Bland–Ford の中立角から。流動応力 k = (2/√3)·K·(ε₀+ε)ⁿ。</p>
+          </div>
+          <div>
+            <h3>スタンド間の連成</h3>
+            <p>張力: dσ<sub>i</sub>/dt = (E/L)(v<sub>in,i+1</sub> − v<sub>out,i</sub>)。出側速度 v<sub>out</sub> = v<sub>R</sub>(1+f)、入側速度は質量流一定 v<sub>in</sub>h₁ = v<sub>out</sub>h₂ + κ l ḣ₂。板厚は L/v の遅れで次スタンドに到達（ライブ計算のみ）。</p>
+            <h3>自励のしくみ</h3>
+            <p>ギャップが閉じると入側速度が落ち、後方張力が積分的に下がって荷重が上がる。荷重の変化はギャップ変位に対して 90° 遅れ、速度に同相の力（負の減衰）になる。負の減衰は速度 v と E/L に比例し、ω² に反比例するので、上下逆位相の低次モード（100–200 Hz）が最初に不安定化する。構造減衰 ζ・ハウジング剛性・スタンド間距離を上げると臨界速度が上がる。</p>
+            <h3>20Hi クラスタ（ゼンジミア）</h3>
+            <p>1 スタンドのみ選択可。各半分の WR・1 次中間ロール×2・2 次中間ロール×3・バッキングベアリング×4 を、荷重経路に沿った直列 4 質量（WR / IMR1 / IMR2 / BB）に集約し、モノブロックハウジングに固定。WR は小径（約 70 mm）で扁平化・接触長が小さく、小径ゆえ中立点を保つには大きめの摩擦係数が要る。WR のオフセット力は無効（1 次中間ロール対に挟まれるため）。</p>
+            <h3>ハウジングの伸び変形（任意）</h3>
+            <p>上側の支持を圧下系剛性 k<sub>sd</sub> → クロスヘッド質量 m<sub>H</sub> → 支柱伸び剛性 k<sub>post</sub> の直列に分ける。k<sub>sd</sub> は k<sub>sd</sub>·k<sub>post</sub>/(k<sub>sd</sub>+k<sub>post</sub>) = k<sub>h</sub> となるよう自動導出し、静剛性（ミル剛性）は変えずにハウジング伸びモード（既定で ≈ 200 Hz）を追加する。</p>
+            <h3>水平自由度（全ロール）</h3>
+            <p>各ロールに圧延方向の変位 x を追加（チョック支持剛性 k<sub>x</sub>／k<sub>xI</sub>／k<sub>xB</sub>、ロール間は接触の接線剛性 k<sub>t</sub> と傾斜接触の幾何剛性 −P/(R<sub>a</sub>+R<sub>b</sub>) で結合）。WR に働く水平力は前後張力差 ½w(σ<sub>f</sub>h₂ − σ<sub>b</sub>h₁)、バイト合力 λ·l·P/R′（トルク反力、入側向き）、オフセット力 ΔP·e/(R<sub>W</sub> + R<sub>B</sub>) の変動分。逆に WR の水平速度はバイトの並進として入側・出側の板速度に加わり、張力→荷重に戻る。</p>
+            <h3>駆動系のねじり振動（任意）</h3>
+            <p>各スタンドを電動機側慣性 J<sub>M</sub>（減速機・ピニオン込み、ロール軸換算）–スピンドル（ねじり剛性 C・減衰・がた Δφ）–上下 WR 慣性 J<sub>W</sub> の 3 慣性系で表す（教科書 §9.4.3 の離散系 (9.31)–(9.33)、図 9.28・9.30）。電動機は速度 PI（図 9.31）で駆動。圧延トルク G = λ·l·P + ½(σ<sub>b</sub>h₁ − σ<sub>f</sub>h₂)·w·R が WR の負荷トルクになり、WR の角速度変動はロール周速として先進率・張力の経路に入る。ねじり固有振動数は既定値で約 20 Hz（上下逆相）／21 Hz（電動機–WR 同相）。</p>
+            <h3>両端リール（単スタンド／リバースミル）</h3>
+            <p>ペイオフ／テンションリールは速度ループ付き駆動（帯域 f<sub>v</sub>）に張力 PI（帯域 f<sub>t</sub>）が速度指令を補正する構成。リール〜スタンド間の板が E/L の積分器として働き、単スタンドでもスタンド間張力と同じ負の減衰機構が現れる。コイル慣性 J と速度ループの剛性でリール〜板の共振（数 Hz〜20 Hz）が決まる。</p>
+            <h3>限界</h3>
+            <p>AGC・張力制御は無視（チャタリング帯域より十分遅い）。摩擦係数の速度依存、油膜、ロール偏心、ハウジングの多次元モードは含まない。減衰比 ζ は最も不確かで、臨界速度を実機に合わせる調整代。</p>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ===== 固有振動 ===== -->
+    <section class="tabpanel" id="tab-modal" hidden>
+      <div class="grid-modal">
+        <div class="card">
+          <div class="card-head">
+            <div><div class="eyebrow">STAND MODES</div><h2>単スタンドの固有モード</h2></div>
+            <div class="chips" id="standChips"></div>
+          </div>
+          <div id="modeList" class="mode-list"></div>
+          <p class="fine">板バネ k<sub>s</sub> を含む無減衰系。クリックでアニメーション。100–200 Hz の帯域は3次オクターブ型、500–700 Hz は5次オクターブ型のチャタリングに対応。</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="eyebrow">MODE SHAPE</div><h2 id="modeTitle">—</h2></div>
+          <div class="stack-wrap">
+            <svg id="stackSvg" role="img" aria-label="選択スタンドのロール系モデルとモード形状"></svg>
+            <div class="phi" id="phiBars"></div>
+          </div>
+          <div class="consts" id="modelConsts"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="eyebrow">COUPLED LINE MODES</div><h2>全スタンド連成系の固有値（線形化・張力連成込み）</h2></div>
+        <div class="table-wrap"><table class="data" id="coupledTable"></table></div>
+        <p class="fine">実部 Re λ &gt; 0 で成長（不安定）。等価減衰比 ζ<sub>eq</sub> = −Re λ / |λ|。参加度はスタンドごとのギャップ振幅（最大を 1 に正規化）。</p>
+      </div>
+    </section>
+
+    <!-- ===== ライブ ===== -->
+    <section class="tabpanel" id="tab-live" hidden>
+      <div class="card live-controls">
+        <div class="ctl">
+          <label for="timeScale">時間スケール</label>
+          <select id="timeScale" class="select">
+            <option value="0.02">1/50（スロー）</option>
+            <option value="0.05" selected>1/20</option>
+            <option value="0.1">1/10</option>
+            <option value="0.2">1/5</option>
+            <option value="1">実時間</option>
+          </select>
+        </div>
+        <div class="ctl">
+          <label for="scopeWin">表示窓</label>
+          <select id="scopeWin" class="select">
+            <option value="0.1">0.1 s</option>
+            <option value="0.25">0.25 s</option>
+            <option value="0.5" selected>0.5 s</option>
+            <option value="1">1 s</option>
+            <option value="2">2 s</option>
+          </select>
+        </div>
+        <div class="ctl">
+          <span class="lbl">インパルス加振（上下）</span>
+          <div class="chips" id="kickChips"></div>
+        </div>
+        <div class="ctl">
+          <span class="lbl">水平加振（WR）</span>
+          <div class="chips" id="kickXChips"></div>
+        </div>
+        <div class="ctl">
+          <span class="lbl">ねじり加振（WR 角速度）</span>
+          <div class="chips" id="kickTChips"></div>
+        </div>
+        <div class="ctl">
+          <label for="entryType">入側板厚外乱</label>
+          <select id="entryType" class="select">
+            <option value="none">なし</option>
+            <option value="sine">正弦波</option>
+            <option value="noise">ランダム</option>
+            <option value="step">矩形（0.5 s 周期）</option>
+          </select>
+          <input id="entryAmp" class="num sm" type="number" value="20" min="0" max="500" step="5" aria-label="外乱振幅 µm"><span class="unit">µm</span>
+          <input id="entryFreq" class="num sm" type="number" value="50" min="1" max="1000" step="1" aria-label="外乱周波数 Hz"><span class="unit">Hz</span>
+        </div>
+        <div class="ctl">
+          <label for="noiseLvl">ロール力ノイズ</label>
+          <input id="noiseLvl" class="num sm" type="number" value="2" min="0" max="200" step="0.5"><span class="unit">kN rms</span>
+        </div>
+        <div class="ctl">
+          <label for="breakAmp">破断しきい値</label>
+          <input id="breakAmp" class="num sm" type="number" value="150" min="30" max="1000" step="10"><span class="unit">µm</span>
+        </div>
+        <div class="ctl">
+          <label for="coilGuide">コイル破断目安</label>
+          <input id="coilGuide" class="num sm" type="number" value="75" min="5" max="500" step="5"><span class="unit">µm</span>
+        </div>
+        <div class="ctl">
+          <label class="check"><input type="checkbox" id="delayOn" checked> 板厚の伝搬遅れ</label>
+        </div>
+        <div class="ctl">
+          <button class="btn" id="btnPause">一時停止</button>
+          <button class="btn ghost" id="btnReset">状態リセット</button>
+        </div>
+      </div>
+
+      <div class="readouts" id="readouts"></div>
+
+      <div class="grid-live">
+        <div class="card span2">
+          <div class="card-head">
+            <div><div class="eyebrow">LIVE WAVEFORMS</div><h2>板厚偏差・張力偏差・荷重偏差（同一時間軸）</h2></div>
+            <div class="ctl-row"><span class="legend-note" id="gaugeScale"></span>
+              <div class="seg" id="gaugeMode" role="group" aria-label="波形の表示"><button type="button" data-mode="overlay" class="on">重ね</button><button type="button" data-mode="split">分割</button></div>
+            </div>
+          </div>
+          <div class="tri">
+            <div class="tri-panel">
+              <div class="tri-head"><span class="eyebrow">EXIT GAUGE</span><span>出側板厚偏差</span></div>
+              <canvas id="scopeGauge" class="chart h-scope"></canvas>
+            </div>
+            <div class="tri-panel">
+              <div class="tri-head"><span class="eyebrow">TENSION</span><span>スタンド間張力偏差</span></div>
+              <canvas id="scopeTension" class="chart h-scope"></canvas>
+            </div>
+            <div class="tri-panel">
+              <div class="tri-head"><span class="eyebrow">ROLL FORCE</span><span>圧延荷重偏差</span></div>
+              <canvas id="scopeForce" class="chart h-scope"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="card span2 wf-card" id="wfCard">
+          <div class="card-head">
+            <div><div class="eyebrow">SPECTROGRAM · WATERFALL</div><h2>時々刻々の FFT（3D ウォーターフォール）</h2></div>
+            <div class="ctl-row">
+              <div class="ctl-row" id="spgChips"></div>
+              <span class="legend-note" id="wfNote"></span>
+              <button class="btn ghost sm" id="wfAll" type="button" hidden>全スタンド</button>
+              <button class="btn ghost sm" id="wfZoom" type="button" aria-pressed="false">拡大表示</button>
+            </div>
+          </div>
+          <div class="wf-grid" id="wfGrid"></div>
+          <div class="tip" id="tipSpg" hidden></div>
+          <p class="fine">信号（板厚偏差 µm／スタンド間張力偏差 MPa／圧延荷重偏差 kN／ロール振動加速度 m/s²／スピンドルトルク偏差 kN·m）ごとに、全スタンド（張力は区間ごと）のパネルを横に並べる。20 ms ごとに直近 0.2 s（4096 点、Hann 窓）を FFT して新しいフレームを手前に積む。横軸 = 周波数、奥行き = 時間（奥ほど過去。「奥行き」で 1.2 / 5 / 10 / 20 s を選択。約 50 列に収めるため、長いときは 1 列に数回分の FFT の最大値＝ピークホールドをまとめ、短いチャタリングも消えない）、高さ Z = 振幅で、Z 軸は全パネル共通。振動は Z 上限 50 m/s² に固定、板厚はスペクトルの縦軸が「破断しきい値」のとき破断しきい値、それ以外は自動スケール。パネル右上の ⤢ でそのスタンドだけを拡大、Esc で閉じる。</p>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div><div class="eyebrow">SPECTRUM</div><h2 id="specTitle">板厚偏差スペクトル</h2></div>
+            <div class="ctl-row"><span class="legend-note" id="specNote">直近 0.41 s · Hann 窓</span>
+              <span class="lbl" style="font-size:11.5px;color:var(--ink-3)">縦軸</span>
+              <div class="seg" id="specScale" role="group" aria-label="スペクトル縦軸"><button type="button" data-scale="thresh" class="on">破断しきい値</button><button type="button" data-scale="auto">自動</button></div>
+            </div>
+          </div>
+          <canvas id="spectrum" class="chart h-spec"></canvas>
+          <div class="tip" id="tipSpec" hidden></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="eyebrow">ROLL VIBRATION</div><h2>WR 振動加速度（上 WR・下 WR、上下方向）</h2></div>
+          <canvas id="scopeVib" class="chart h-small"></canvas>
+          <p class="fine">WR チョック取付の加速度計に相当。上 WR は濃色、下 WR は淡色。ギャップ開閉モードでは逆符号、並進モードでは同符号になる。</p>
+        </div>
+        <div class="card span2">
+          <div class="card-head"><div class="eyebrow">WORK ROLL HORIZONTAL</div><h2>WR 水平変位（上 WR、出側 +）</h2></div>
+          <canvas id="scopeWrx" class="chart h-small"></canvas>
+        </div>
+        <div class="card span2" hidden>
+          <div class="card-head"><div class="eyebrow">SPINDLE TORQUE</div><h2>スピンドルトルク偏差（上スピンドル）</h2></div>
+          <canvas id="scopeTq" class="chart h-small"></canvas>
+          <p class="fine">電動機側と上 WR の間のねじりトルクの動作点からの偏差。がたを設定すると遊び区間でトルクが 0 になる非線形が出る。</p>
+        </div>
+      </div>
+      <div class="legend" id="liveLegend"></div>
+    </section>
+
+    <!-- ===== 安定性マップ ===== -->
+    <section class="tabpanel" id="tab-stability" hidden>
+      <div class="card">
+        <div class="card-head">
+          <div><div class="eyebrow">STABILITY MAP</div><h2>速度 × パラメータの安定判別</h2></div>
+          <div class="ctl-row">
+            <div class="seg" id="mapMode" role="group" aria-label="マップ表示"><button type="button" data-mode="single" class="on">単一</button><button type="button" data-mode="all">全縦軸</button><button type="button" data-mode="stand">スタンド別</button></div>
+            <span class="lbl" style="font-size:11.5px;color:var(--ink-3)">対象モード</span>
+            <div class="seg" id="mapFamily" role="group" aria-label="判別の対象モード"><button type="button" data-family="all" class="on">全モード</button><button type="button" data-family="vert">垂直</button><button type="button" data-family="horiz">水平</button><button type="button" data-family="tors">ねじり</button></div>
+            <span id="mapAxisWrap" class="ctl-row">
+            <label for="mapAxis">縦軸</label>
+            <select id="mapAxis" class="select">
+              <option value="zeta" selected>要素減衰比 ζ</option>
+              <option value="mu">摩擦係数（全スタンド倍率）</option>
+              <option value="tension">スタンド間張力（倍率）</option>
+              <option value="Lgap">スタンド間距離 L</option>
+              <option value="kHouse">ハウジング剛性</option>
+              <option value="width">板幅</option>
+            </select>
+            </span>
+            <label for="mapRes">解像度</label>
+            <select id="mapRes" class="select">
+              <option value="20">粗 20×16</option>
+              <option value="28" selected>標準 28×20</option>
+              <option value="40">細 40×28</option>
+              <option value="60">最細 60×60</option>
+            </select>
+            <span class="lbl" style="font-size:11.5px;color:var(--ink-3)">色</span>
+            <div class="seg" id="mapColor" role="group" aria-label="マップの色"><button type="button" data-color="re" class="on">Re λ</button><button type="button" data-color="mode">モード帯</button></div>
+            <span class="progress" id="mapProgress"></span>
+          </div>
+        </div>
+        <p class="map-family-note" id="mapFamilyNote" hidden></p>
+        <div class="map-wrap">
+          <canvas id="heatmap" class="chart h-map"></canvas>
+          <div id="mapMulti" hidden></div>
+          <div class="tip" id="tipMap" hidden></div>
+        </div>
+        <div class="legend" id="mapLegend" hidden></div>
+        <p class="fine">「対象モード」で垂直（上下ギャップ・ロール相対・ハウジング伸び）／水平／ねじりを選ぶと、その種類のモードだけで最も不安定な固有値を取って判別する（臨界速度一覧・No.3×No.4 マップも同じ。対象モードが無い点は灰色）。色 = 連成系の最不安定固有値の実部 Re λ（1/s）。赤 = 成長（チャタリング）、青 = 減衰。白線 = 安定限界、◇ = 現在の運転点。線形化モデルなので板厚の伝搬遅れは含まない。「全縦軸」は 6 種類の縦軸を一括計算して横並びに表示（色スケール共通、解像度は単一の約 7 割）。「スタンド別」は要素減衰比 ζ（共通）に加えて、摩擦係数をスタンドごと（No.1〜n の μ）、張力を区間ごと（入側・1–2・…・出側の σ）、圧下率をスタンドごと（出側板厚を変化、次スタンドの入側板厚も連動）に個別に変化させたマップをスタンド数分並べる。4 スタンド以上では圧下率段の下に別の行を設け、速度を現状 +200 / +400 / +600 m/min に固定した No.3×No.4 圧下率マップ 3 枚（最終出側板厚一定、実線 = No.3・No.4 だけの配分替え）を横に並べ、その下に速度ごとの比較表を表示する（安定な配分が無い速度でも表示）。マップ内のラベルは領域ごとの主な周波数（中央値）と主スタンド。「モード帯」の色分けは、安定＝薄い青、不安定域はその最不安定モードの種類で垂直振動（上下ギャップ開閉・ロール相対・ハウジング伸び）＝オレンジ、水平振動＝緑、ねじり振動（駆動系）＝紫、その他（張力・リール・高次）＝灰。細かい種別はホバーとラベルで確認。金色の点線 = 近似式（負の減衰の釣り合い、解説 §5 式 (5.4)）による臨界速度のスタンド最小値。隣スタンドの応答を無視するため数値計算より低速側に出る。</p>
+        <details class="model-notes" style="margin-top:8px">
+          <summary><span class="eyebrow">HOW TO READ</span><h2>安定性マップの詳細説明</h2></summary>
+          <div class="notes-grid">
+            <div>
+              <h3>何を計算しているか</h3>
+              <p>格子点ごとに、その運転条件で動作点（各スタンドの荷重・先進率・板バネ剛性）を求め直し、全スタンドのロール系＋スタンド間張力（＋リール、WR 水平）を含む非線形状態方程式を動作点まわりで数値的に線形化して行列 A を作る。A の固有値 λ = Re λ ± j·2πf のうち、振動モード（f ≥ 5 Hz）で実部が最大のものを採る。Re λ &gt; 0 なら微小な擾乱が e<sup>Re λ·t</sup> で成長する＝チャタリングが自励する条件。</p>
+              <h3>色と線</h3>
+              <p>赤の濃さは成長率（1/s）。例えば +20 /s なら板厚偏差が 10 倍になるまで ln10/20 ≈ 0.12 s。青は減衰率で、濃いほど早く収まる。白線（Re λ = 0 の等高線）が安定限界で、横軸方向にこの線を読めば各条件の臨界速度になる。◇ は今のサイドバー設定の位置。線の右側（高速側）が不安定領域。</p>
+              <h3>ホバー</h3>
+              <p>各格子でのモード周波数と主スタンド（ギャップ振幅が最大のスタンド）を表示する。3 次オクターブ帯（100–200 Hz）と 5 次オクターブ帯（500–700 Hz）のどちらが先に立つかを、周波数から判別できる。</p>
+            </div>
+            <div>
+              <h3>縦軸の選び方</h3>
+              <p><b>要素減衰比 ζ</b>: 実機で最も不確かな量。実測の臨界速度が分かっていれば、白線がそれを通る ζ を選ぶのが校正の手順。<br><b>摩擦係数倍率</b>: 全スタンドの μ を一斉にスケール。潤滑状態（乳化・油膜）の変化に対応。μ が下がると荷重が下がり、板バネ剛性も下がるため限界が動く。<br><b>張力倍率</b>: スタンド間張力の設定値を一斉にスケール。<br><b>スタンド間距離 L</b>: 張力剛性 E/L を通じて負の減衰の大きさを決める。短いほど不利。<br><b>ハウジング剛性</b>: ミル剛性。高いほどギャップ開閉モードの周波数が上がり、負の減衰（∝ 1/ω²）が効きにくくなる。<br><b>板幅</b>: 荷重と張力による力の両方に比例。</p>
+              <h3>前提と限界</h3>
+              <p>線形化なので「小振幅の擾乱が育つかどうか」だけを判定する。振幅が育ったあとの飽和や破断はライブ計算で見る。板厚の伝搬遅れ（L/v）は含めていないため、再生型（前スタンドの板厚ムラが次スタンドで増幅される）チャタリングの周波数選択性はマップには現れない。AGC・張力制御の遅い動特性も無視。数値は既定パラメータ（特に ζ）に依存する目安であり、実機データによる校正が前提。</p>
+              <h3>計算コスト</h3>
+              <p>格子は 28×20 で 560 点。各点で行列サイズ N（5 スタンド 4Hi・水平あり: 64）の固有値問題を解く。裏側の Web Worker で数秒。解像度「細」は 4 倍かかる。パラメータを変えると自動で再計算する。</p>
+            </div>
+          </div>
+        </details>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="eyebrow">CRITICAL SPEED</div><h2>臨界速度一覧</h2></div>
+        <div class="table-wrap"><table class="data" id="critTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== モデル解説 ===== -->
+    <section class="tabpanel" id="tab-doc" hidden>
+      <!-- __DOC__ -->
+    </section>
+
+    <footer class="foot">
+      <span>モデル: 質量–バネ ロール系 + Hill/Bland–Ford ロールバイト + 張力連成 + 板厚伝搬遅れ。定量値はパラメータ依存の目安であり実機のチューニングが前提。</span>
+    </footer>
+  </main>
+</div>
+
+<dialog id="jsonDlg" class="dlg">
+  <form method="dialog" class="dlg-body">
+    <div class="dlg-head">
+      <div><div class="eyebrow">CONDITIONS · JSON</div><h2>条件の書き出し／読み込み</h2></div>
+      <button class="btn ghost sm" type="submit" value="close">閉じる</button>
+    </div>
+    <p class="fine">「書き出し」で現在の全パラメータ（スタンド構成・スケジュール・剛性・水平・ハウジング・ねじり・リール・材料）と表示設定を JSON にする。読み込みは下の欄に JSON を貼るか、ファイルを選ぶ。不明なキーは無視、欠けたキーは現在値のまま。</p>
+    <div class="dlg-tools">
+      <button class="btn sm" type="button" id="jsonExport">書き出し（欄に表示）</button>
+      <button class="btn ghost sm" type="button" id="jsonCopy">コピー</button>
+      <button class="btn ghost sm" type="button" id="jsonDownload">ダウンロード</button>
+      <label class="btn ghost sm" for="jsonFile">ファイルから読み込み…</label>
+      <input id="jsonFile" type="file" accept=".json,application/json" hidden>
+      <button class="btn sm" type="button" id="jsonImport">欄の JSON を読み込み</button>
+    </div>
+    <textarea id="jsonText" class="jsontext" spellcheck="false" aria-label="条件 JSON" placeholder='{"params": { ... }}'></textarea>
+    <div class="fine" id="jsonStatus" role="status"></div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/ml-matrix@6.11.1/matrix.umd.js"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']], tags: 'none' },
+  svg: { fontCache: 'global' },
+  options: { enableMenu: false, renderActions: { addMenu: [] } },
+  startup: { typeset: false },
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js" async></script>
+<script id="modelSrc">
+/* __MODEL__ */
+</script>
+<script>
+/* __APP__ */
+</script>
