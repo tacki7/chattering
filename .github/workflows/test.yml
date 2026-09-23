@@ -1,0 +1,31 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch ml-matrix (pinned version and hash)
+        run: |
+          curl -sSfL -o src/mlmatrix.umd.js https://cdn.jsdelivr.net/npm/ml-matrix@6.11.1/matrix.umd.js
+          echo "b79a2d7cbfdf0a94558dc5954cf6adb946049c9f2a4ed1a5b7cc588ccabf1f42  src/mlmatrix.umd.js" | sha256sum -c -
+      - name: Build, and the committed dist is up to date
+        run: |
+          node src/build.js
+          git diff --exit-code -- dist/chatter-lab.html
+      - name: Checks (fail on a wrong result)
+        run: node src/test_check.js
+      - name: Smoke runs
+        run: |
+          node src/test_model.js
+          node src/test_sim.js
